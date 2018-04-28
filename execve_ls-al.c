@@ -1,7 +1,7 @@
 /*
 Title:    Linux x86 execve("/bin/ls -al") - 37 bytes
 Author:   Amine Kanane <aminekanane_93@hotmail.com>
-Desc:     Executes /bin/ls -al Using JMP - CALL - POP Trick
+Desc:     Executes /bin/ls -al Using The Stack
 
 Disassembly of section .text:
 
