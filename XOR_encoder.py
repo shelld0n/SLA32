@@ -20,7 +20,7 @@ def encode(code, XOR_key, encoded_code, encoded_code_l):
 	print encoded_code
 	print "Use This to build : "+encoded_code_l
 	print 'Len: %d' % len(bytearray(code))
-    print 'XOR Key to decode : '+hex(XOR_key)
+    	print 'XOR Key to decode : '+hex(XOR_key)
 
 code = "PUT_SHELLCODE_HERE"
 encode(code, XOR_key, encoded_code, encoded_code_l)
