@@ -1,7 +1,9 @@
 /*
-Title:    Linux x86 TCP Bind Shell - 95 bytes
-Author:   Amine Kanane <aminekanane_93@hotmail.com>
-Desc:     Listen for a connection on Local Port 9443 and spawn a command shell
+Title:      Linux x86 TCP Bind Shell - 95 bytes
+Author:     Amine Kanane <aminekanane_93@hotmail.com>
+Desc:       Listen for a connection on Local Port 9443 and spawn a command shell
+Tested on:  Linux/x86 - SMP Debian 4.9.30-1kali1
+Date:       6 May 2018
 
 Disassembly of section .text:
 
