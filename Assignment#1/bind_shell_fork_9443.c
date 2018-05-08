@@ -4,6 +4,7 @@ Author:     Amine Kanane <aminekanane_93@hotmail.com>
 Student-ID: SLAE - 1203
 Desc:       Listen for a connection on Local Port 9443 and spawn a command shell
             This version support multiple simultaneous connections using fork().
+	    Also this shellcode does not use the classic socketcall() syscall.
 Tested on:  Linux/x86 - SMP Debian 4.9.30-1kali1
 Date:       7 May 2018
 
