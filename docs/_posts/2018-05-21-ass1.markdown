@@ -1,13 +1,38 @@
 ---
 layout: post
-title:  "Assignement #1"
+title:  "SLA32 - Assignement #1"
+author: "Amine Kanane"
 date:   2018-05-21 14:22:16 +0000
 categories: jekyll update
 permalink: Assignement1
 ---
-You’ll find this post in your `_posts` directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run `jekyll serve`, which launches a web server and auto-regenerates your site when a file is updated.
+<blockquote class="u--startsWithDoubleQuote"> This blog post has been created for completing the requirements of the <a href="http://securitytube-training.com/online-courses/securitytube-linux-assembly-expert/">SecurityTube Linux Assembly Expert certification</a> <br>
+Student ID: SLAE-1203 </blockquote>
 
-To add new posts, simply add a file in the `_posts` directory that follows the convention `YYYY-MM-DD-name-of-post.ext` and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.
+The First assignement was about developing a shellcode that listens for a connection on a Local Port (9443 in this case) and spawn a command shell whenever someone connects to it. The idea is to be able to run arbitrary commands on the target system, after successfull exploitation of course :D. Also in this assignement i will try to come with something custom :
+
+1. The use of `socket` syscall instead of the classic `socketcall` syscall
+2. We will create something that does not die after the first successfull connection, and able to accept multiple conections ! (Fork, Fork, Fork :D)
+
+Before we start i highly recommend to make sure you understand the difference between a **TCP bind shell** and a **TCP reverse shell**. Here is some reference you can start with : [Bind Vs Reverse TCP Shell]
+
+Now that all the concept of Bind vs Reverse shell is no longer an issue, we can begin our journey to build our first TCP Bind Shell in assembly !
+In order to share the same big picture, this what we are planning to do here, it's a simple road map that summarizes all the actions we need to take in order to have a basic working bind shell.
+
+![Concept](SLA32_1.png)
+
+As we can see we are expecting to have 6 multiple syscalls : `socket`, `bind`, `listen`, `accept`, `dup2`, and finally `execve`. Let's start by looking for the int of each syscall in the `unistd_32.h` file (depending on your distribution you can have this file somewhere else). In my case the file was located at : */usr/include/i386-linux-gnu/asm/unistd_32.h*.
+
+Now using : `cat /usr/include/i386-linux-gnu/asm/unistd_32.h | grep socket` we can retrieve the int of socket syscall. After doing the same for every syscall we are planning to use the results will be something like :
+
+|      | Int     | Hexa     |
+| :------------- | :------------- | :------------- |
+| Socket     | 359       | 0x167       |
+| Bind     | 361       | 0x169       |
+| Listen     | 363       | 0x16b       |
+| Accept     | 364       | 0x16c       |
+| Dup2     | 63       | 0x3f       |
+| Execve     | 358       | 0x166       |
 
 Jekyll also offers powerful support for code snippets:
 
@@ -25,3 +50,5 @@ Check out the [Jekyll docs][jekyll-docs] for more info on how to get the most ou
 [jekyll-docs]: https://jekyllrb.com/docs/home
 [jekyll-gh]:   https://github.com/jekyll/jekyll
 [jekyll-talk]: https://talk.jekyllrb.com/
+[Bind Vs Reverse TCP Shell]: https://www.hackingtutorials.org/networking/hacking-netcat-part-2-bind-reverse-shells/
+[SecurityTube Linux Assembly Expert certification]: http://securitytube-training.com/online-courses/securitytube-linux-assembly-expert/
