@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "SLA32 - Assignement #1"
+title:  "SLA32 - Assignement #1 - TCP Bind Shell"
 author: "Amine Kanane"
 date:   2018-05-21 14:22:16 +0000
 categories: jekyll update
@@ -17,13 +17,13 @@ The First assignement was about developing a shellcode that listens for a connec
 Before we start i highly recommend to make sure you understand the difference between a **TCP bind shell** and a **TCP reverse shell**. Here is some reference you can start with : [Bind Vs Reverse TCP Shell]
 
 Now that all the concept of Bind vs Reverse shell is no longer an issue, we can begin our journey to build our first TCP Bind Shell in assembly !
-In order to share the same big picture, this what we are planning to do here, it's a simple road map that summarizes all the actions we need to take in order to have a basic working bind shell.
+In order to share the same big picture, this is what we are planning to do here, it's a simple road map that summarizes all the actions we need to take in order to have a basic working bind shell.
 
 ![Concept](SLA32_1.png)
 
-As we can see we are expecting to have 6 multiple syscalls : `socket`, `bind`, `listen`, `accept`, `dup2`, and finally `execve`. Let's start by looking for the int of each syscall in the `unistd_32.h` file (depending on your distribution you can have this file somewhere else). In my case the file was located at : */usr/include/i386-linux-gnu/asm/unistd_32.h*.
+As we can see we are expecting to have 6 multiple syscalls : `socket`, `bind`, `listen`, `accept`, `dup2`, and finally `execve`. Let's start by looking for the reference (*int number*) of each syscall in the `unistd_32.h` file (depending on your distribution you can have this file somewhere else). In my case the file was located at : */usr/include/i386-linux-gnu/asm/unistd_32.h*.
 
-Now using : `cat /usr/include/i386-linux-gnu/asm/unistd_32.h | grep socket` we can retrieve the int of socket syscall. After doing the same for every syscall we are planning to use the results will be something like :
+Now using : `cat /usr/include/i386-linux-gnu/asm/unistd_32.h | grep socket` we can retrieve the reference (*int number*) of socket syscall. After doing the same for every syscall we are planning to use the results will be something like :
 
 |      | Int     | Hexa     |
 | :------------- | :------------- | :------------- |
@@ -34,16 +34,60 @@ Now using : `cat /usr/include/i386-linux-gnu/asm/unistd_32.h | grep socket` we c
 | Dup2     | 63       | 0x3f       |
 | Execve     | 358       | 0x166       |
 
-Jekyll also offers powerful support for code snippets:
+Reling on the previous references, we will be able to call the functions and execute our plan, but first we need to understand how parameters are being set when calling a function with syscall (**int 0x80**). In  typical 32 bit architecture, we need to setup arguments following this order :
 
+- EAX Register : The System call number (**reference int**)
+- EBX Register : The 1st argument to pass
+- ECX Register : The 2nd argument to pass
+- EDX Register : The 3rd argument to pass
+- ESI Register : The 4th argument to pass
+- EDI Register : The 5th argument to pass
+
+/!\ Please keep in mind that the result will be stored in EAX after the execution of the function. At this stage you may have a small idea of why in C programming functions only returns one value or pointer.
+
+Now with all of these interesting details, we can start crafting our shellcode. First let's take a look on what socket() function should look like. By typing `man socket` we can see that socket() function takes three parameters and returns a **file descriptor** for the new socket on success:
+{% highlight C %}
+int socket(int domain, int type, int protocol);
+{% endhighlight %}
+
+Where the  **domain**  argument  specifies  a communication domain (AF_INET for Ipv4), the **type** argument specifies the communication semantics (SOCK_STREAM for tcp or SOCK_DGRAM for udp and so on...). And finally the **protocol** argument specifies a particular protocol to be used with the socket (0 in our case).
+
+So basicly to create an initial TCP socket we need to do the following :
+
+{% highlight C %}
+sockfd = socket(AF_INET, SOCK_STREAM, 0);
+{% endhighlight %}
+
+Let's get our hand dirty and implement this line of C code with assembly :
 {% highlight assembly %}
-08048060 <_start>:
- 8048060:	31 c0                	xor    eax,eax
- 8048062:	31 db                	xor    ebx,ebx
- 8048064:	31 c9                	xor    ecx,ecx
- 8048066:	31 d2                	xor    edx,edx
+; Bind Shell Port 9443
+
+global _start
+
+section .text
+
+_start:
+      xor eax, eax
+      xor ebx, ebx
+      xor ecx, ecx
+      xor edx, edx, ; set dl to 0 to set Protocol IPPROTO_IP
+      mov ax, 0x167 ; Syscall for socket() is 0x167
+      mov bl, 0x02 ; domain AF_INET 2
+      mov cl, 0x01 ; type SOCK_STREAM 1
+      int 0x80
 
 {% endhighlight %}
+
+Here is a quick recap of what we have done so far, first we set all registers (EAX, EBX, ECX, EDX) to value 0x00. There is two intersting thing about setting these registers to 0x00: **Why ?** and **Why use XOR ?**
+- **Why ?** Simply because at some point we will be setting the lower bits of these registers to a certain value and we will need to be sure that the whole register is also set to this value.
+- **Why Using XOR ?** you are right to ask this question because a simple `mov eax, 0x00` or `mov eax, 0x167` will do the job, but to make our shellcode more reliable it's mandatory to avoid all characters like 0x00 which will, in our case break the string of the sellcode.
+
+Once done we can set arguments in the order we saw earlier, EDX should be 0x00, EBX sould be 0x02, ECX should be 0x01 and of course EAX should be set to 0x167 which is the reference of Socket() syscall.
+The `int 0x80` instruction will call the kernel and the function will execute. After execution we will have the register EAX pointing on the socket object we just created.
+
+Now that we have a socket object, we want to bind it to a pecific port on the target machine. As mentionned in the diagram above we will use Bind(). 
+
+
 
 Check out the [Jekyll docs][jekyll-docs] for more info on how to get the most out of Jekyll. File all bugs/feature requests at [Jekyll’s GitHub repo][jekyll-gh]. If you have questions, you can ask them on [Jekyll Talk][jekyll-talk].
 
