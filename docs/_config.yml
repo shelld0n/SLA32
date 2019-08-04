@@ -21,7 +21,7 @@ description: >- # this means to ignore newlines until "baseurl:"
  I hope this blog helps new bloods in infosec struggling with the concept of shellcoding.
  This blog was initially created for completing the requirements of the SecurityTube.
  Linux Assembly Expert (x86) certification. Student ID: SLAE-1203
-baseurl: "/SLA32" # the subpath of your site, e.g. /blog
+baseurl: "/" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: aminekanane
 github_username:  Aminekanane
